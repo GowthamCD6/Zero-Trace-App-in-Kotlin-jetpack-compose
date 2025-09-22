@@ -1,0 +1,6 @@
+<resources>
+    <style name="Theme.ZeroTrace" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+        <item name="android:statusBarColor">@color/blue_500</item>
+        <item name="android:navigationBarColor">@color/green_500</item>
+    </style>
+</resources>
