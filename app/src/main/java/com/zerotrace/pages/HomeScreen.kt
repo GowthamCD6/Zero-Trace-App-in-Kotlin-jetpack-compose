@@ -1,6 +1,8 @@
 package com.zerotrace.pages
 
-import androidx.compose.animation.core.*
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.EaseOutCubic
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
@@ -8,253 +10,441 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.scale
-import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 @Composable
-fun HomeScreen(onNavigateToInstruction: () -> Unit) {
+fun HomeScreen(
+    onNavigateToInstruction: () -> Unit,
+    userName: String = "User"
+) {
     val fadeAnim = remember { Animatable(0f) }
-    val slideAnim = remember { Animatable(30f) }
+    val slideAnim = remember { Animatable(50f) }
     val contentOpacity = remember { Animatable(0f) }
-    val buttonScale = remember { Animatable(0.95f) }
+    val buttonScale = remember { Animatable(0.9f) }
 
     LaunchedEffect(Unit) {
-        fadeAnim.animateTo(1f, animationSpec = tween(800))
-        slideAnim.animateTo(0f, animationSpec = tween(600))
-        contentOpacity.animateTo(1f, animationSpec = tween(700))
-        buttonScale.animateTo(1f, animationSpec = tween(400))
+        fadeAnim.animateTo(1f, animationSpec = tween(1000, easing = EaseOutCubic))
+        slideAnim.animateTo(0f, animationSpec = tween(800, easing = EaseOutCubic))
+        contentOpacity.animateTo(1f, animationSpec = tween(1200, delayMillis = 200))
+        buttonScale.animateTo(1f, animationSpec = tween(600, delayMillis = 400))
     }
 
     val features = listOf(
-        Feature("🔒", "Guaranteed Data Destruction", "Uses NIST-standard cryptographic erasure, the method recommended for modern mobile devices.", Color(0xFFEF4444)),
-        Feature("🛡️", "Tamper-Proof Verification", "Generates a digitally-signed certificate proving the wipe was successful and authentic.", Color(0xFF3B82F6)),
-        Feature("🔐", "Offline & Secure", "The entire process works without sending your data to the cloud. Your secrets stay with you.", Color(0xFF10B981))
+        Feature(
+            icon = Icons.Filled.Lock,
+            title = "Guaranteed Data Destruction",
+            description = "Military-grade cryptographic erasure following NIST standards for complete data sanitization.",
+            color = Color(0xFFEF4444)
+        ),
+        Feature(
+            icon = Icons.Filled.VerifiedUser,
+            title = "Tamper-Proof Verification",
+            description = "Generates digitally-signed certificates proving successful wipe completion for compliance.",
+            color = Color(0xFF3B82F6)
+        ),
+        Feature(
+            icon = Icons.Filled.PrivacyTip,
+            title = "100% Offline & Secure",
+            description = "Complete privacy protection - no cloud connectivity, all processes remain on your device.",
+            color = Color(0xFF10B981)
+        )
     )
 
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFFFAFBFC))
+            .background(
+                brush = Brush.verticalGradient(
+                    colors = listOf(Color(0xFFFAFBFC), Color(0xFFF8FAFC))
+                )
+            )
             .alpha(fadeAnim.value)
     ) {
-        // Background pattern
+        // Top background curve
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(240.dp)
-                .background(Color(0xFFF1F5F9), shape = RoundedCornerShape(bottomStart = 40.dp, bottomEnd = 40.dp))
+                .height(280.dp)
+                .background(
+                    brush = Brush.verticalGradient(
+                        colors = listOf(Color(0xFFEFF6FF), Color(0xFFF1F5F9))
+                    ),
+                    shape = RoundedCornerShape(bottomStart = 50.dp, bottomEnd = 50.dp)
+                )
         )
 
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp)
-                .padding(top = 60.dp, bottom = 20.dp),
+                .padding(horizontal = 24.dp)
+                .padding(top = 40.dp, bottom = 32.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Header Section
+            // User Greeting Section
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 32.dp)
+                    .offset(y = slideAnim.value.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Start
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.WavingHand,
+                    contentDescription = "Waving Hand",
+                    tint = Color(0xFFFFB020),
+                    modifier = Modifier.size(24.dp)
+                )
+                Spacer(modifier = Modifier.width(12.dp))
+                Text(
+                    text = "Hello, $userName!",
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = Color(0xFF0F172A)
+                )
+            }
+
+            // Header
             Column(
                 modifier = Modifier
-    
-                    .offset(y = slideAnim.value.dp),
+                    .offset(y = slideAnim.value.dp)
+                    .padding(bottom = 48.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(
                     text = "ZeroTrace",
-                    fontSize = 32.sp,
-                    fontWeight = FontWeight.Light,
+                    fontSize = 36.sp,
+                    fontWeight = FontWeight.ExtraLight,
                     color = Color(0xFF0F172A),
-                    letterSpacing = 2.sp
+                    letterSpacing = 3.sp
                 )
+
+                Spacer(modifier = Modifier.height(12.dp))
+
                 Box(
                     modifier = Modifier
-                        .width(60.dp)
-                        .height(2.dp)
-                        .background(Color(0xFF3B82F6))
-                )
-                Text(
-                    text = "DATA WIPING SOLUTION",
-                    fontSize = 12.sp,
-                    color = Color(0xFF64748B),
-                    fontWeight = FontWeight.SemiBold,
-                    letterSpacing = 3.sp,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.padding(bottom = 24.dp)
-                )
-                Card(
-                    shape = RoundedCornerShape(24.dp),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 12.dp),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .border(1.dp, Color(0x1A3B82F6), RoundedCornerShape(24.dp))
-                ) {
-                    Column(
-                        modifier = Modifier.padding(24.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Text(
-                            text = "ZeroTrace",
-                            fontSize = 28.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color(0xFF0F172A),
-                            textAlign = TextAlign.Center,
-                            letterSpacing = 1.sp,
-                            modifier = Modifier.padding(bottom = 20.dp)
+                        .width(80.dp)
+                        .height(4.dp)
+                        .background(
+                            brush = Brush.horizontalGradient(
+                                colors = listOf(Color(0xFF3B82F6), Color(0xFF1D4ED8))
+                            ),
+                            shape = RoundedCornerShape(2.dp)
                         )
-                        Text(
-                            text = "ZeroTrace ensures your personal data is permanently and verifiably destroyed before you recycle or resell your Android device. We leverage the device's built-in cryptographic erasure to render data irrecoverable, generating a digitally-signed certificate of sanitization for your records and for compliance purposes.",
-                            fontSize = 16.sp,
-                            color = Color(0xFF374151),
-                            textAlign = TextAlign.Center,
-                            fontWeight = FontWeight.Normal,
-                            lineHeight = 24.sp
+                )
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Text(
+                    text = "SECURE DATA ERASURE",
+                    fontSize = 13.sp,
+                    color = Color(0xFF64748B),
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 2.sp,
+                    textAlign = TextAlign.Center
+                )
+            }
+
+            // Description Card
+            Card(
+                shape = RoundedCornerShape(32.dp),
+                elevation = CardDefaults.cardElevation(defaultElevation = 16.dp),
+                colors = CardDefaults.cardColors(containerColor = Color.White),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier.padding(32.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(80.dp)
+                            .background(
+                                brush = Brush.radialGradient(
+                                    colors = listOf(
+                                        Color(0xFF3B82F6).copy(alpha = 0.1f),
+                                        Color(0xFF3B82F6).copy(alpha = 0.05f)
+                                    )
+                                ),
+                                shape = CircleShape
+                            )
+                            .border(2.dp, Color(0xFF3B82F6).copy(alpha = 0.2f), CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.VerifiedUser,
+                            contentDescription = "Verified User",
+                            tint = Color(0xFF3B82F6),
+                            modifier = Modifier.size(40.dp)
                         )
                     }
+
+                    Spacer(modifier = Modifier.height(24.dp))
+
+                    Text(
+                        text = "Professional Data Sanitization",
+                        fontSize = 24.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF0F172A),
+                        textAlign = TextAlign.Center,
+                        lineHeight = 30.sp
+                    )
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    Text(
+                        text = "ZeroTrace ensures complete and verifiable destruction of personal data before device disposal. Using advanced cryptographic erasure techniques, we render all information permanently irrecoverable while generating compliance-ready certification.",
+                        fontSize = 16.sp,
+                        color = Color(0xFF64748B),
+                        textAlign = TextAlign.Center,
+                        fontWeight = FontWeight.Normal,
+                        lineHeight = 26.sp
+                    )
                 }
             }
-            Spacer(modifier = Modifier.height(40.dp))
+
+            Spacer(modifier = Modifier.height(56.dp))
 
             // Features Section
             Column(
                 modifier = Modifier.alpha(contentOpacity.value),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Text(
-                    text = "Key Features",
-                    fontSize = 22.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color(0xFF0F172A),
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.padding(bottom = 24.dp)
-                )
-                features.forEach { feature ->
-                    FeatureCard(feature)
-                }
-                // Security Badge
                 Row(
-                    modifier = Modifier
-                        .background(Color(0x0D10B981), shape = RoundedCornerShape(16.dp))
-                        .border(1.dp, Color(0x3310B981), RoundedCornerShape(16.dp))
-                        .padding(20.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(bottom = 32.dp)
                 ) {
                     Box(
                         modifier = Modifier
-                            .size(48.dp)
-                            .background(Color(0x1A10B981), shape = CircleShape),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(text = "🏆", fontSize = 20.sp)
-                    }
-                    Column(modifier = Modifier.padding(start = 16.dp)) {
-                        Text(
-                            text = "NIST Certified",
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color(0xFF059669),
-                            modifier = Modifier.padding(bottom = 4.dp)
-                        )
-                        Text(
-                            text = "Meets highest security standards for data sanitization",
-                            fontSize = 14.sp,
-                            color = Color(0xFF047857),
-                            fontWeight = FontWeight.Normal
-                        )
-                    }
-                }
-            }
-            Spacer(modifier = Modifier.height(24.dp))
-
-            // Action Section
-            Column(
-                modifier = Modifier.scale(buttonScale.value),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Button(
-                    onClick = onNavigateToInstruction,
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF3B82F6)),
-                    shape = RoundedCornerShape(16.dp),
-                    modifier = Modifier
-                        .padding(vertical = 18.dp, horizontal = 48.dp)
-                        .shadow(6.dp, RoundedCornerShape(16.dp))
-                ) {
+                            .width(40.dp)
+                            .height(2.dp)
+                            .background(Color(0xFFE5E7EB))
+                    )
                     Text(
-                        text = "Get Started",
-                        color = Color.White,
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        letterSpacing = 0.5.sp,
-                        modifier = Modifier.padding(end = 8.dp)
+                        text = "Key Features",
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF111827),
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.padding(horizontal = 16.dp)
                     )
                     Box(
                         modifier = Modifier
-                            .size(20.dp)
-                            .background(Color.White.copy(alpha = 0.2f), shape = CircleShape),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(text = "→", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                            .width(40.dp)
+                            .height(2.dp)
+                            .background(Color(0xFFE5E7EB))
+                    )
+                }
+
+                features.forEachIndexed { index, feature ->
+                    FeatureCard(feature)
+                    if (index < features.size - 1) {
+                        Spacer(modifier = Modifier.height(16.dp))
                     }
                 }
-                Text(
-                    text = "📋 Review preparation guide before proceeding",
-                    fontSize = 14.sp,
-                    color = Color(0xFF6B7280),
-                    textAlign = TextAlign.Center,
-                    fontWeight = FontWeight.Medium
-                )
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                // Security Badge
+                Card(
+                    shape = RoundedCornerShape(24.dp),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFFF0FDF4)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier.padding(24.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(60.dp)
+                                .background(
+                                    brush = Brush.radialGradient(
+                                        colors = listOf(
+                                            Color(0xFF10B981).copy(alpha = 0.2f),
+                                            Color(0xFF10B981).copy(alpha = 0.1f)
+                                        )
+                                    ),
+                                    shape = CircleShape
+                                )
+                                .border(2.dp, Color(0xFF10B981).copy(alpha = 0.3f), CircleShape),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.Star,
+                                contentDescription = "Certified",
+                                tint = Color(0xFF10B981),
+                                modifier = Modifier.size(28.dp)
+                            )
+                        }
+
+                        Column(modifier = Modifier.padding(start = 20.dp)) {
+                            Text(
+                                text = "NIST SP 800-88 Certified",
+                                fontSize = 17.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF059669)
+                            )
+                            Text(
+                                text = "Meets federal standards for media sanitization and data destruction",
+                                fontSize = 14.sp,
+                                color = Color(0xFF047857),
+                                fontWeight = FontWeight.Medium,
+                                lineHeight = 20.sp,
+                                modifier = Modifier.padding(top = 4.dp)
+                            )
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(64.dp))
+
+            // Action Button Section
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .scale(buttonScale.value),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.fillMaxWidth(0.85f)
+                ) {
+                    Button(
+                        onClick = onNavigateToInstruction,
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1E293B)),
+                        shape = RoundedCornerShape(24.dp),
+                        elevation = ButtonDefaults.buttonElevation(defaultElevation = 12.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(64.dp)
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center
+                        ) {
+                            Text(
+                                text = "Begin Secure Erasure",
+                                color = Color.White,
+                                fontSize = 17.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                letterSpacing = 0.5.sp
+                            )
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Icon(
+                                imageVector = Icons.Filled.ArrowForward,
+                                contentDescription = "Arrow Forward",
+                                tint = Color.White,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(20.dp))
+
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.PrivacyTip,
+                            contentDescription = "Privacy Tip",
+                            tint = Color(0xFF6B7280),
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "Review preparation guide before proceeding",
+                            fontSize = 14.sp,
+                            color = Color(0xFF6B7280),
+                            textAlign = TextAlign.Center,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                }
             }
         }
     }
 }
 
-data class Feature(val icon: String, val title: String, val description: String, val color: Color)
+data class Feature(
+    val icon: ImageVector,
+    val title: String,
+    val description: String,
+    val color: Color
+)
 
 @Composable
 fun FeatureCard(feature: Feature) {
-    Row(
-        modifier = Modifier
-            .background(Color.White, shape = RoundedCornerShape(20.dp))
-            .padding(24.dp)
-            .fillMaxWidth()
-            .shadow(3.dp, RoundedCornerShape(20.dp))
-            .border(1.dp, Color(0xFFF1F5F9), RoundedCornerShape(20.dp))
-            .padding(bottom = 16.dp),
-        verticalAlignment = Alignment.Top
+    Card(
+        shape = RoundedCornerShape(24.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 6.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        modifier = Modifier.fillMaxWidth()
     ) {
-        Box(
-            modifier = Modifier
-                .size(56.dp)
-                .background(feature.color.copy(alpha = 0.08f), shape = CircleShape),
-            contentAlignment = Alignment.Center
+        Row(
+            modifier = Modifier.padding(24.dp),
+            verticalAlignment = Alignment.Top
         ) {
-            Text(text = feature.icon, fontSize = 24.sp)
-        }
-        Column(modifier = Modifier.padding(start = 16.dp)) {
-            Text(
-                text = feature.title,
-                fontSize = 18.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = Color(0xFF111827),
-                modifier = Modifier.padding(bottom = 8.dp)
-            )
-            Text(
-                text = feature.description,
-                fontSize = 15.sp,
-                color = Color(0xFF6B7280),
-                lineHeight = 22.sp,
-                fontWeight = FontWeight.Normal
-            )
+            Box(
+                modifier = Modifier
+                    .size(64.dp)
+                    .background(
+                        brush = Brush.radialGradient(
+                            colors = listOf(
+                                feature.color.copy(alpha = 0.15f),
+                                feature.color.copy(alpha = 0.08f)
+                            )
+                        ),
+                        shape = CircleShape
+                    )
+                    .border(2.dp, feature.color.copy(alpha = 0.2f), CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = feature.icon,
+                    contentDescription = feature.title,
+                    tint = feature.color,
+                    modifier = Modifier.size(28.dp)
+                )
+            }
+
+            Spacer(modifier = Modifier.width(20.dp))
+
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = feature.title,
+                    fontSize = 17.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF111827),
+                    lineHeight = 24.sp
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = feature.description,
+                    fontSize = 14.sp,
+                    color = Color(0xFF6B7280),
+                    lineHeight = 22.sp,
+                    fontWeight = FontWeight.Normal
+                )
+            }
         }
     }
 }
