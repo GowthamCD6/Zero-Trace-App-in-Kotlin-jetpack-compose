@@ -24,7 +24,7 @@ import androidx.compose.ui.unit.sp
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun LoginScreen(onNavigateToHome: () -> Unit) {
+fun LoginScreen(onNavigateToHome: (String) -> Unit) {
     var username by remember { mutableStateOf("") }
     var showError by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf("") }
@@ -43,7 +43,7 @@ fun LoginScreen(onNavigateToHome: () -> Unit) {
             else -> {
                 showError = false
                 focusManager.clearFocus()
-                onNavigateToHome()
+                onNavigateToHome(username)
             }
         }
     }

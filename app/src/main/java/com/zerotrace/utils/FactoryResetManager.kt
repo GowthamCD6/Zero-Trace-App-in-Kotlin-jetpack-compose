@@ -10,10 +10,6 @@ import android.util.Log
 import android.widget.Toast
 import com.zerotrace.DeviceAdminReceiver
 
-/**
- * Factory Reset Manager handles the secure factory reset process
- * Requires device admin permissions to perform the reset
- */
 class FactoryResetManager {
     
     companion object {

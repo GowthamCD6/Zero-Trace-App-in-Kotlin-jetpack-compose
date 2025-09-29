@@ -33,6 +33,7 @@ class MainActivity : ComponentActivity() {
             var showLogin by remember { mutableStateOf(false) }
             var showHome by remember { mutableStateOf(false) }
             var showInstruction by remember { mutableStateOf(false) }
+            var userName by remember { mutableStateOf("") }
             if (showWelcome) {
                 com.zerotrace.pages.WelcomeScreen(
                     onGetStarted = {
@@ -42,7 +43,8 @@ class MainActivity : ComponentActivity() {
                 )
             } else if (showLogin) {
                 com.zerotrace.pages.LoginScreen(
-                    onNavigateToHome = {
+                    onNavigateToHome = { name ->
+                        userName = name
                         showLogin = false
                         showHome = true
                     }
@@ -52,7 +54,8 @@ class MainActivity : ComponentActivity() {
                     onNavigateToInstruction = {
                         showHome = false
                         showInstruction = true
-                    }
+                    },
+                    userName = userName
                 )
             } else if (showInstruction) {
                 com.zerotrace.pages.InstructionScreen(
