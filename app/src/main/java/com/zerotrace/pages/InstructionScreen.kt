@@ -1,5 +1,8 @@
 package com.zerotrace.pages
-
+import com.zerotrace.utils.DeveloperOptionsUtils
+import com.zerotrace.utils.StorageUtils
+import com.zerotrace.utils.BatteryUtils
+import com.zerotrace.utils.BackgroundAppChecker
 import androidx.compose.animation.core.*
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
@@ -27,13 +30,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.zerotrace.utils.BatteryUtils
-import com.zerotrace.utils.BackgroundAppChecker
 import android.widget.Toast
 import androidx.compose.ui.platform.LocalContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun InstructionScreen(onNavigateToStart: () -> Unit) {
     val fadeAnim = remember { Animatable(0f) }
@@ -47,6 +48,30 @@ fun InstructionScreen(onNavigateToStart: () -> Unit) {
 
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
+
+    // Developer Options status for step 3
+    var devOptionsEnabled by remember { mutableStateOf(false) }
+    var devOptionsChecked by remember { mutableStateOf(false) }
+    var showDevOptionsModal by remember { mutableStateOf(false) }
+
+    // (Removed LaunchedEffect that auto-shows modal for Developer Options)
+    // Modal warning if Developer Options is off
+    if (showDevOptionsModal) {
+        AlertDialog(
+            onDismissRequest = { showDevOptionsModal = false },
+            confirmButton = {
+                Button(onClick = { showDevOptionsModal = false }) {
+                    Text("OK")
+                }
+            },
+            title = {
+                Text("Developer Options Disabled")
+            },
+            text = {
+                Text("Your mobile phone's Developer Options are off. Please enable them to continue.")
+            }
+        )
+    }
 
     val tutorialSteps = listOf(
         TutorialStep(
@@ -62,7 +87,7 @@ fun InstructionScreen(onNavigateToStart: () -> Unit) {
             id = 2,
             title = "Verify Storage Access",
             description = "Ensure the app can read and write to the drive",
-            details = "Grant ZeroTrace permission to access the connected storage. The app will verify that it can save your device identifiers (model, serial number, IMEI) to the drive for later verification.",
+            details = "Grant ZeroTrace permission to access the connected storage. The app will verify that it can save your device identifiers (model, serial number, IMEI) to the drive for later verification.\n\nClick here to auto collect data.",
             icon = Icons.Filled.Storage,
             color = Color(0xFF9C27B0),
             warning = "Storage access is required for the certificate process"
@@ -105,15 +130,6 @@ fun InstructionScreen(onNavigateToStart: () -> Unit) {
         ),
         TutorialStep(
             id = 7,
-            title = "Disable Security Locks",
-            description = "Remove screen locks, PIN, password, or pattern",
-            details = "Temporarily disable screen lock, fingerprint, face unlock, and any device encryption passwords. You'll need to remove Google account lock as well. This prevents verification issues after the reset.",
-            icon = Icons.Filled.VerifiedUser,
-            color = Color(0xFFE91E63),
-            warning = "Factory Reset Protection must be disabled"
-        ),
-        TutorialStep(
-            id = 8,
             title = "Keep USB Drive Ready",
             description = "You'll physically remove and reconnect the drive",
             details = "After device information is saved, you'll be instructed to physically remove the USB drive before starting the wipe. After your device resets to factory state, you'll reconnect the same drive for verification and certificate generation.",
@@ -122,6 +138,60 @@ fun InstructionScreen(onNavigateToStart: () -> Unit) {
             warning = "Use the SAME USB drive after reset - don't lose it!"
         )
     )
+    // ...existing code...
+    // Tutorial Steps rendering
+    Column(
+        modifier = Modifier.alpha(stepsOpacity.value),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Text(
+            text = "Preparation Steps",
+            fontSize = 22.sp,
+            fontWeight = FontWeight.Bold,
+            color = Color(0xFF1A1A1A),
+            modifier = Modifier.padding(bottom = 8.dp)
+        )
+
+        tutorialSteps.forEachIndexed { index, step ->
+            if (step.id == 1) {
+                // Make the card non-clickable and provide an explicit button to check storage
+                EnhancedTutorialStepCard(
+                    step = step,
+                    completed = completedSteps.contains(step.id),
+                    stepNumber = 1,
+                    totalSteps = tutorialSteps.size,
+                    clickable = false,
+                    onClick = {}
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Button(
+                    onClick = {
+                        currentStepIndex = index
+                        val detected = StorageUtils.checkExternalStorage(context, showToast = true)
+                        completedSteps = if (detected) completedSteps + step.id else completedSteps - step.id
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(8.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1976D2))
+                ) {
+                    Text(text = "Check Storage", color = Color.White)
+                }
+            } else {
+                EnhancedTutorialStepCard(
+                    step = step,
+                    completed = completedSteps.contains(step.id),
+                    stepNumber = index + 1,
+                    totalSteps = tutorialSteps.size,
+                    onClick = {
+                        currentStepIndex = index
+                        // ...other step handling...
+                    }
+                )
+            }
+        }
+    }
 
     val allStepsCompleted = completedSteps.size == tutorialSteps.size
     val progressPercentage = completedSteps.size / tutorialSteps.size.toFloat()
@@ -237,41 +307,88 @@ fun InstructionScreen(onNavigateToStart: () -> Unit) {
                 )
 
                 tutorialSteps.forEachIndexed { index, step ->
-                    EnhancedTutorialStepCard(
-                        step = step,
-                        completed = completedSteps.contains(step.id),
-                        stepNumber = index + 1,
-                        totalSteps = tutorialSteps.size,
-                        onClick = {
+                    if (step.id == 3) {
+                        EnhancedTutorialStepCard(
+                            step,
+                            completedSteps.contains(step.id),
+                            index + 1,
+                            tutorialSteps.size
+                        ) {
                             currentStepIndex = index
-                            if (step.id == 5) {
-                                coroutineScope.launch {
-                                    BackgroundAppChecker.checkBackgroundApps(context)
-                                    // Always allow user to manually mark as complete after dialog
+                            if (DeveloperOptionsUtils.isDeveloperOptionsEnabled(context)) {
+                                devOptionsEnabled = true
+                                completedSteps = completedSteps + step.id
+                                Toast.makeText(context, "✅ Developer Options Enabled", Toast.LENGTH_SHORT).show()
+                            } else {
+                                devOptionsEnabled = false
+                                completedSteps = completedSteps - step.id
+                                // Only show modal when user taps
+                                showDevOptionsModal = true
+                            }
+                        }
+                        // Show yellow warning card only if OFF
+                        if (!devOptionsEnabled) {
+                            Card(
+                                shape = RoundedCornerShape(12.dp),
+                                colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF8E1)),
+                                modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
+                            ) {
+                                Column(
+                                    Modifier.padding(16.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    Text("Developer Options are currently OFF",
+                                        color = Color(0xFFD32F2F),
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 16.sp
+                                    )
+                                    Spacer(Modifier.height(12.dp))
+                                    Button(
+                                        onClick = { DeveloperOptionsUtils.handleDeveloperOptionsAction(context) },
+                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1976D2)),
+                                        shape = RoundedCornerShape(8.dp)
+                                    ) {
+                                        Text("Enable Developer Options", color = Color.White)
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        EnhancedTutorialStepCard(
+                            step = step,
+                            completed = completedSteps.contains(step.id),
+                            stepNumber = index + 1,
+                            totalSteps = tutorialSteps.size,
+                            onClick = {
+                                currentStepIndex = index
+                                if (step.id == 5) {
+                                    coroutineScope.launch {
+                                        BackgroundAppChecker.checkBackgroundApps(context)
+                                        completedSteps = if (completedSteps.contains(step.id)) {
+                                            completedSteps - step.id
+                                        } else {
+                                            completedSteps + step.id
+                                        }
+                                    }
+                                } else if (step.id == 6) {
+                                    coroutineScope.launch {
+                                        val batteryOk = BatteryUtils.isBatterySufficient(context, 50)
+                                        if (batteryOk) {
+                                            completedSteps = completedSteps + step.id
+                                        } else {
+                                            completedSteps = completedSteps - step.id
+                                        }
+                                    }
+                                } else {
                                     completedSteps = if (completedSteps.contains(step.id)) {
                                         completedSteps - step.id
                                     } else {
                                         completedSteps + step.id
                                     }
                                 }
-                            } else if (step.id == 6) {
-                                coroutineScope.launch {
-                                    val batteryOk = BatteryUtils.isBatterySufficient(context, 50)
-                                    if (batteryOk) {
-                                        completedSteps = completedSteps + step.id
-                                    } else {
-                                        completedSteps = completedSteps - step.id
-                                    }
-                                }
-                            } else {
-                                completedSteps = if (completedSteps.contains(step.id)) {
-                                    completedSteps - step.id
-                                } else {
-                                    completedSteps + step.id
-                                }
                             }
-                        }
-                    )
+                        )
+                    }
                 }
             }
 
@@ -548,6 +665,7 @@ fun EnhancedTutorialStepCard(
     completed: Boolean,
     stepNumber: Int,
     totalSteps: Int,
+    clickable: Boolean = true,
     onClick: () -> Unit
 ) {
     val cardScale = remember { Animatable(1f) }
@@ -579,7 +697,7 @@ fun EnhancedTutorialStepCard(
             .fillMaxWidth()
             .scale(cardScale.value)
             .border(2.dp, borderColor, RoundedCornerShape(16.dp))
-            .clickable { onClick() }
+            .then(if (clickable) Modifier.clickable { onClick() } else Modifier)
     ) {
         Column(
             modifier = Modifier.padding(20.dp)
