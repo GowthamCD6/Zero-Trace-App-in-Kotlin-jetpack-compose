@@ -18,6 +18,7 @@ import com.zerotrace.data.DeviceDataManager
 import com.zerotrace.data.models.WipeData
 import com.zerotrace.security.CryptoManager
 import com.zerotrace.storage.ExternalStorageManager
+import com.zerotrace.utils.DeviceInfoCollector
 
 class MainActivity : ComponentActivity() {
     private lateinit var devicePolicyManager: DevicePolicyManager
@@ -102,6 +103,13 @@ class MainActivity : ComponentActivity() {
                 )
             }
         }
+    }
+
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        
+        // Handle storage access result for device info collection
+        DeviceInfoCollector.handleStorageAccessResult(this, requestCode, resultCode, data)
     }
 }
 

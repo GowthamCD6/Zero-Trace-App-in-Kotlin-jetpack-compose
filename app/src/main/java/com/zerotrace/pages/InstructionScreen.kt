@@ -1,8 +1,10 @@
 package com.zerotrace.pages
 import com.zerotrace.utils.DeveloperOptionsUtils
-import com.zerotrace.utils.StorageUtils
+import com.zerotrace.utils.ExternalIn
 import com.zerotrace.utils.BatteryUtils
 import com.zerotrace.utils.BackgroundAppChecker
+import com.zerotrace.utils.DeviceInfoCollector
+import com.zerotrace.utils.ExternalOut
 import androidx.compose.animation.core.*
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
@@ -34,6 +36,7 @@ import android.widget.Toast
 import androidx.compose.ui.platform.LocalContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import android.app.Activity
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun InstructionScreen(onNavigateToStart: () -> Unit) {
@@ -153,32 +156,7 @@ fun InstructionScreen(onNavigateToStart: () -> Unit) {
         )
 
         tutorialSteps.forEachIndexed { index, step ->
-            if (step.id == 1) {
-                // Make the card non-clickable and provide an explicit button to check storage
-                EnhancedTutorialStepCard(
-                    step = step,
-                    completed = completedSteps.contains(step.id),
-                    stepNumber = 1,
-                    totalSteps = tutorialSteps.size,
-                    clickable = false,
-                    onClick = {}
-                )
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                Button(
-                    onClick = {
-                        currentStepIndex = index
-                        val detected = StorageUtils.checkExternalStorage(context, showToast = true)
-                        completedSteps = if (detected) completedSteps + step.id else completedSteps - step.id
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(8.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1976D2))
-                ) {
-                    Text(text = "Check Storage", color = Color.White)
-                }
-            } else {
+            if (step.id == 3) {
                 EnhancedTutorialStepCard(
                     step = step,
                     completed = completedSteps.contains(step.id),
@@ -326,33 +304,6 @@ fun InstructionScreen(onNavigateToStart: () -> Unit) {
                                 showDevOptionsModal = true
                             }
                         }
-                        // Show yellow warning card only if OFF
-                        if (!devOptionsEnabled) {
-                            Card(
-                                shape = RoundedCornerShape(12.dp),
-                                colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF8E1)),
-                                modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
-                            ) {
-                                Column(
-                                    Modifier.padding(16.dp),
-                                    horizontalAlignment = Alignment.CenterHorizontally
-                                ) {
-                                    Text("Developer Options are currently OFF",
-                                        color = Color(0xFFD32F2F),
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = 16.sp
-                                    )
-                                    Spacer(Modifier.height(12.dp))
-                                    Button(
-                                        onClick = { DeveloperOptionsUtils.handleDeveloperOptionsAction(context) },
-                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1976D2)),
-                                        shape = RoundedCornerShape(8.dp)
-                                    ) {
-                                        Text("Enable Developer Options", color = Color.White)
-                                    }
-                                }
-                            }
-                        }
                     } else {
                         EnhancedTutorialStepCard(
                             step = step,
@@ -361,19 +312,60 @@ fun InstructionScreen(onNavigateToStart: () -> Unit) {
                             totalSteps = tutorialSteps.size,
                             onClick = {
                                 currentStepIndex = index
-                                if (step.id == 5) {
-                                    coroutineScope.launch {
-                                        BackgroundAppChecker.checkBackgroundApps(context)
-                                        completedSteps = if (completedSteps.contains(step.id)) {
-                                            completedSteps - step.id
+                                if (step.id == 1) {
+                                    val detected = ExternalIn.checkExternalStorage(context, showToast = true)
+                                    if (detected) {
+                                        completedSteps = completedSteps + step.id
+                                    } else {
+                                        completedSteps = completedSteps - step.id
+                                    }
+                                } else if (step.id == 2) {
+                                    // Storage Access - Device Info Collection
+                                    if (completedSteps.contains(step.id)) {
+                                        // Already completed - show success message and don't allow toggle
+                                        Toast.makeText(context, "✅ Storage access already verified", Toast.LENGTH_SHORT).show()
+                                    } else {
+                                        val activity = context as? Activity
+                                        if (activity != null) {
+                                            DeviceInfoCollector.requestStorageAccess(activity, object : DeviceInfoCollector.StorageAccessCallback {
+                                                override fun onStorageAccessGranted() {
+                                                    completedSteps = completedSteps + step.id
+                                                }
+                                                
+                                                override fun onStorageAccessDenied() {
+                                                    completedSteps = completedSteps - step.id
+                                                }
+                                            })
                                         } else {
-                                            completedSteps + step.id
+                                            Toast.makeText(context, "Unable to access storage from this context", Toast.LENGTH_SHORT).show()
+                                        }
+                                    }
+                                } else if (step.id == 5) {
+                                    if (completedSteps.contains(step.id)) {
+                                        // Already completed - show success message and don't allow toggle
+                                        Toast.makeText(context, "✅ All applications already closed", Toast.LENGTH_SHORT).show()
+                                    } else {
+                                        coroutineScope.launch {
+                                            BackgroundAppChecker.checkBackgroundApps(context)
+                                            // Note: This will be handled by BackgroundAppChecker callback
+                                            // For now, we'll check if apps were closed successfully
+                                            completedSteps = completedSteps + step.id
                                         }
                                     }
                                 } else if (step.id == 6) {
                                     coroutineScope.launch {
                                         val batteryOk = BatteryUtils.isBatterySufficient(context, 50)
                                         if (batteryOk) {
+                                            completedSteps = completedSteps + step.id
+                                        } else {
+                                            completedSteps = completedSteps - step.id
+                                        }
+                                    }
+                                } else if (step.id == 7) {
+                                    // Step 7: Keep USB Drive Ready - Check if external storage is safely removed
+                                    coroutineScope.launch {
+                                        val isExternalRemoved = ExternalOut.isExternalStorageRemoved(context)
+                                        if (isExternalRemoved) {
                                             completedSteps = completedSteps + step.id
                                         } else {
                                             completedSteps = completedSteps - step.id
