@@ -140,6 +140,15 @@ fun InstructionScreen(onNavigateToStart: () -> Unit) {
             color = Color(0xFF8BC34A),
             warning = "Use the SAME USB drive after reset - don't lose it!"
         )
+        TutorialStep(
+            id = 8,
+            title = "Keep USB Drive Ready",
+            description = "You'll physically remove and reconnect the drive",
+            details = "After device information is saved, you'll be instructed to physically remove the USB drive before starting the wipe. After your device resets to factory state, you'll reconnect the same drive for verification and certificate generation.",
+            icon = Icons.Filled.Storage,
+            color = Color(0xFF8BC34A),
+            warning = "Use the SAME USB drive after reset - don't lose it!"
+        )
     )
     // ...existing code...
     // Tutorial Steps rendering
