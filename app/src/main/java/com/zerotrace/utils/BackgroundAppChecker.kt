@@ -25,6 +25,7 @@ object BackgroundAppChecker {
             showPermissionRequiredDialog(context)
             return
         }
+        
 
         val usageStatsManager = context.getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
         val endTime = System.currentTimeMillis()
