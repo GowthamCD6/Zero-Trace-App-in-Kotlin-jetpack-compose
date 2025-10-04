@@ -14,10 +14,14 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -27,38 +31,49 @@ import android.widget.Toast
 import com.zerotrace.utils.FactoryResetManager
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlin.math.cos
+import kotlin.math.sin
 
-// Modern Color Palette
-private val DarkBg = Color(0xFF0A0E1A)
-private val CardBg = Color(0xFF141B2E)
-private val PrimaryAccent = Color(0xFF6366F1)
-private val DangerAccent = Color(0xFFEF4444)
-private val WarningAccent = Color(0xFFF59E0B)
-private val TextPrimary = Color(0xFFFFFFFF)
-private val TextSecondary = Color(0xFF94A3B8)
-private val TextTertiary = Color(0xFF64748B)
+// App-consistent Color Palette (aligned with HomeScreen)
+private val BackgroundPrimary = Color(0xFFFAFBFC) // very light
+private val BackgroundSecondary = Color(0xFFF8FAFC) // subtle gradient
+private val CardBackground = Color(0xFFFFFFFF) // white cards
+private val AccentBlue = Color(0xFF3B82F6)
+private val AccentRed = Color(0xFFEF4444)
+private val AccentAmber = Color(0xFFFBBF24)
+private val TextPrimary = Color(0xFF0F172A) // dark text
+private val TextSecondary = Color(0xFF64748B) // muted dark
+private val TextMuted = Color(0xFF6B7280)
+private val BorderColor = Color(0xFFE5E7EB)
 
 @Composable
 fun WipeScreen(onNavigateBack: () -> Unit) {
-    var rippleAnimations by remember { mutableStateOf(listOf<RippleAnimation>()) }
+    var particleAnimations by remember { mutableStateOf(listOf<ParticleAnimation>()) }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     
-    val fadeAnim by animateFloatAsState(
-        targetValue = 1f,
-        animationSpec = tween(1000, easing = FastOutSlowInEasing),
-        label = "fade"
-    )
+    val infiniteTransition = rememberInfiniteTransition(label = "infinite")
     
-    val infiniteTransition = rememberInfiniteTransition(label = "pulse")
-    val pulseAnim by infiniteTransition.animateFloat(
+    // Gentle breathing animation for the button
+    val breatheScale by infiniteTransition.animateFloat(
         initialValue = 1f,
-        targetValue = 1.08f,
+        targetValue = 1.05f,
         animationSpec = infiniteRepeatable(
-            animation = tween(2000, easing = FastOutSlowInEasing),
+            animation = tween(3000, easing = FastOutSlowInEasing),
             repeatMode = RepeatMode.Reverse
         ),
-        label = "pulse"
+        label = "breathe"
+    )
+    
+    // Rotating orbit animation
+    val orbitRotation by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(20000, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "orbit"
     )
     
     Box(
@@ -66,17 +81,16 @@ fun WipeScreen(onNavigateBack: () -> Unit) {
             .fillMaxSize()
             .background(
                 Brush.verticalGradient(
-                    colors = listOf(DarkBg, Color(0xFF0F1628))
+                    colors = listOf(BackgroundPrimary, BackgroundSecondary)
                 )
             )
-            .alpha(fadeAnim)
     ) {
-        BackgroundElements()
+        SubtleBackgroundPattern()
         
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(24.dp)
+                .padding(horizontal = 24.dp)
                 .statusBarsPadding(),
             verticalArrangement = Arrangement.SpaceBetween
         ) {
@@ -86,24 +100,36 @@ fun WipeScreen(onNavigateBack: () -> Unit) {
                 modifier = Modifier.weight(1f),
                 verticalArrangement = Arrangement.SpaceEvenly
             ) {
-                StatusCard()
+                InformationCard()
                 
-                ActionSection(
-                    pulseAnim = pulseAnim,
-                    rippleAnimations = rippleAnimations,
+                WipeButtonSection(
+                    breatheScale = breatheScale,
+                    orbitRotation = orbitRotation,
+                    particleAnimations = particleAnimations,
                     onButtonPress = {
                         scope.launch {
-                            val newRipple = RippleAnimation()
-                            rippleAnimations = rippleAnimations + newRipple
+                            // Create particle burst effect
+                            val particles = (0..8).map { 
+                                ParticleAnimation(angle = it * 40f)
+                            }
+                            particleAnimations = particles
                             
-                            delay(1500)
-                            rippleAnimations = rippleAnimations.filter { it.id != newRipple.id }
+                            delay(1000)
+                            particleAnimations = emptyList()
                             
                             val resetResult = FactoryResetManager.performFactoryReset(context)
                             if (resetResult) {
-                                Toast.makeText(context, "Factory reset initiated...", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(
+                                    context, 
+                                    "Factory reset initiated...", 
+                                    Toast.LENGTH_SHORT
+                                ).show()
                             } else {
-                                Toast.makeText(context, "Factory reset failed. Enable device admin.", Toast.LENGTH_LONG).show()
+                                Toast.makeText(
+                                    context, 
+                                    "Factory reset failed. Please enable device admin.", 
+                                    Toast.LENGTH_LONG
+                                ).show()
                             }
                         }
                     }
@@ -116,39 +142,43 @@ fun WipeScreen(onNavigateBack: () -> Unit) {
 }
 
 @Composable
-private fun BackgroundElements() {
+private fun SubtleBackgroundPattern() {
     Canvas(modifier = Modifier.fillMaxSize()) {
+        val gridSize = 60.dp.toPx()
+        
+        // Subtle grid pattern
+        for (x in 0 until (size.width / gridSize).toInt()) {
+            for (y in 0 until (size.height / gridSize).toInt()) {
+                drawCircle(
+                    color = Color(0x08FFFFFF),
+                    radius = 2.dp.toPx(),
+                    center = Offset(x * gridSize, y * gridSize)
+                )
+            }
+        }
+        
+        // Accent glow - top right
         drawCircle(
             brush = Brush.radialGradient(
                 colors = listOf(
-                    Color(0x266366F1),
+                    Color(0x1A3B82F6),
                     Color(0x00000000)
                 )
             ),
-            radius = 300.dp.toPx(),
-            center = Offset(size.width * 0.85f, size.height * 0.15f)
+            radius = 280.dp.toPx(),
+            center = Offset(size.width * 0.9f, size.height * 0.1f)
         )
         
+        // Accent glow - bottom left
         drawCircle(
             brush = Brush.radialGradient(
                 colors = listOf(
-                    Color(0x1AEF4444),
+                    Color(0x12DC2626),
                     Color(0x00000000)
                 )
             ),
-            radius = 250.dp.toPx(),
-            center = Offset(size.width * 0.1f, size.height * 0.7f)
-        )
-        
-        drawCircle(
-            brush = Brush.radialGradient(
-                colors = listOf(
-                    Color(0x1A8B5CF6),
-                    Color(0x00000000)
-                )
-            ),
-            radius = 200.dp.toPx(),
-            center = Offset(size.width * 0.5f, size.height * 0.4f)
+            radius = 240.dp.toPx(),
+            center = Offset(size.width * 0.15f, size.height * 0.85f)
         )
     }
 }
@@ -157,106 +187,122 @@ private fun BackgroundElements() {
 private fun HeaderSection() {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier.padding(top = 20.dp, bottom = 32.dp)
+        modifier = Modifier.padding(top = 16.dp, bottom = 16.dp)
     ) {
         Text(
-            text = "ZEROTRACE",
-            fontSize = 36.sp,
-            fontWeight = FontWeight.Black,
+            text = "ZeroTrace",
+            fontSize = 32.sp,
+            fontWeight = FontWeight.Bold,
             color = TextPrimary,
-            letterSpacing = 6.sp
+            letterSpacing = 1.sp
+        )
+        
+        Spacer(modifier = Modifier.height(6.dp))
+        
+        Box(
+            modifier = Modifier
+                .width(50.dp)
+                .height(2.dp)
+                .background(AccentBlue, RoundedCornerShape(1.dp))
         )
         
         Spacer(modifier = Modifier.height(8.dp))
         
-        Box(
-            modifier = Modifier
-                .width(60.dp)
-                .height(3.dp)
-                .background(
-                    Brush.horizontalGradient(
-                        colors = listOf(PrimaryAccent, DangerAccent)
-                    ),
-                    RoundedCornerShape(2.dp)
-                )
-        )
-        
-        Spacer(modifier = Modifier.height(12.dp))
-        
         Text(
-            text = "SECURE WIPE PROTOCOL",
-            fontSize = 11.sp,
-            fontWeight = FontWeight.Bold,
+            text = "Secure Data Erasure",
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Medium,
             color = TextSecondary,
-            letterSpacing = 3.sp
+            letterSpacing = 0.5.sp
         )
     }
 }
 
 @Composable
-private fun StatusCard() {
+private fun InformationCard() {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = CardBg),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = CardBackground),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
         Column(
-            modifier = Modifier.padding(24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
+            modifier = Modifier
+                .padding(20.dp)
+                .fillMaxWidth()
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.Center,
-                modifier = Modifier.padding(bottom = 20.dp)
+                modifier = Modifier.padding(bottom = 16.dp)
             ) {
                 Box(
                     modifier = Modifier
-                        .size(10.dp)
-                        .background(WarningAccent, CircleShape)
-                        .border(2.dp, Color(0x33F59E0B), CircleShape)
+                        .size(8.dp)
+                        .background(AccentAmber, CircleShape)
                 )
                 
-                Spacer(modifier = Modifier.width(10.dp))
+                Spacer(modifier = Modifier.width(12.dp))
                 
                 Text(
-                    text = "SYSTEM READY",
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.ExtraBold,
-                    color = WarningAccent,
-                    letterSpacing = 2.sp
+                    text = "System Ready",
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = AccentAmber,
+                    letterSpacing = 0.5.sp
+                )
+            }
+            
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.padding(bottom = 12.dp)
+            ) {
+                Text(
+                    text = "⚠",
+                    fontSize = 24.sp,
+                    modifier = Modifier.padding(end = 12.dp)
+                )
+                
+                Text(
+                    text = "Important Warning",
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = TextPrimary
                 )
             }
             
             Text(
-                text = "⚠️",
-                fontSize = 32.sp,
-                modifier = Modifier.padding(bottom = 12.dp)
-            )
-            
-            Text(
-                text = "CRITICAL WARNING",
-                fontSize = 18.sp,
-                fontWeight = FontWeight.ExtraBold,
-                color = DangerAccent,
-                letterSpacing = 1.sp,
+                text = "This action will permanently erase all data on your device. This operation cannot be reversed or undone.",
+                fontSize = 15.sp,
+                color = TextSecondary,
+                lineHeight = 24.sp,
                 modifier = Modifier.padding(bottom = 16.dp)
             )
             
             Text(
-                text = "This action will permanently erase ALL data on your device. The operation is irreversible and cannot be undone. Please ensure all important information has been securely backed up.",
+                text = "Please ensure you have:",
                 fontSize = 14.sp,
-                color = TextSecondary,
-                textAlign = TextAlign.Center,
-                lineHeight = 22.sp,
-                modifier = Modifier.padding(bottom = 24.dp)
+                fontWeight = FontWeight.SemiBold,
+                color = TextPrimary,
+                modifier = Modifier.padding(bottom = 10.dp)
             )
             
-            Divider(
-                color = Color(0x1AFFFFFF),
-                thickness = 1.dp,
-                modifier = Modifier.padding(vertical = 16.dp)
+            Column(
+                modifier = Modifier.padding(start = 4.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                InfoBullet("Backed up all important files")
+                InfoBullet("Saved your photos and documents")
+                InfoBullet("Logged out of all accounts")
+            }
+            
+            Spacer(modifier = Modifier.height(16.dp))
+            
+            HorizontalDivider(
+                color = BorderColor,
+                thickness = 1.dp
             )
+            
+            Spacer(modifier = Modifier.height(16.dp))
             
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -267,26 +313,27 @@ private fun StatusCard() {
                     Text(
                         text = "Target Device",
                         fontSize = 12.sp,
-                        color = TextTertiary,
+                        color = TextMuted,
                         fontWeight = FontWeight.Medium
                     )
+                    Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = "Current Device",
-                        fontSize = 15.sp,
+                        text = "This Device",
+                        fontSize = 16.sp,
                         color = TextPrimary,
-                        fontWeight = FontWeight.Bold
+                        fontWeight = FontWeight.SemiBold
                     )
                 }
                 
                 Surface(
                     shape = RoundedCornerShape(8.dp),
-                    color = Color(0x1AEF4444)
+                    color = AccentRed.copy(alpha = 0.08f)
                 ) {
                     Text(
                         text = "ACTIVE",
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
-                        color = DangerAccent,
+                        color = AccentRed,
                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
                         letterSpacing = 1.sp
                     )
@@ -297,125 +344,207 @@ private fun StatusCard() {
 }
 
 @Composable
-private fun ActionSection(
-    pulseAnim: Float,
-    rippleAnimations: List<RippleAnimation>,
+private fun InfoBullet(text: String) {
+    Row(
+        verticalAlignment = Alignment.Top,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Box(
+            modifier = Modifier
+                .padding(top = 7.dp)
+                .size(6.dp)
+                .background(AccentBlue, CircleShape)
+        )
+        Spacer(modifier = Modifier.width(12.dp))
+        Text(
+            text = text,
+            fontSize = 14.sp,
+            color = TextSecondary,
+            lineHeight = 20.sp,
+            modifier = Modifier.weight(1f)
+        )
+    }
+}
+
+@Composable
+private fun WipeButtonSection(
+    breatheScale: Float,
+    orbitRotation: Float,
+    particleAnimations: List<ParticleAnimation>,
     onButtonPress: () -> Unit
 ) {
     Column(
-        horizontalAlignment = Alignment.CenterHorizontally
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier.fillMaxWidth()
     ) {
         Text(
             text = "Initialize Data Wipe",
-            fontSize = 20.sp,
-            fontWeight = FontWeight.Bold,
+            fontSize = 22.sp,
+            fontWeight = FontWeight.SemiBold,
             color = TextPrimary,
-            textAlign = TextAlign.Center
+            textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth()
         )
         
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(10.dp))
         
         Text(
-            text = "Tap the button to begin the secure erasure process",
+            text = "Tap the button below to begin the secure erasure process",
             fontSize = 14.sp,
             color = TextSecondary,
             textAlign = TextAlign.Center,
-            lineHeight = 20.sp
+            lineHeight = 22.sp,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp)
         )
         
-        Spacer(modifier = Modifier.height(40.dp))
+    Spacer(modifier = Modifier.height(12.dp))
         
         Box(
             contentAlignment = Alignment.Center,
-            modifier = Modifier.size(140.dp)
+            modifier = Modifier.size(180.dp)
         ) {
-            rippleAnimations.forEach { ripple ->
-                RippleEffect(ripple)
+            // Orbiting particles
+            OrbitingElements(rotation = orbitRotation)
+            
+            // Burst particles
+            particleAnimations.forEach { particle ->
+                BurstParticle(particle)
             }
             
+            // Outer glow ring
             Box(
                 modifier = Modifier
-                    .size(140.dp)
-                    .scale(pulseAnim)
+                    .size(150.dp)
+                    .scale(breatheScale)
                     .background(
                         Brush.radialGradient(
                             colors = listOf(
-                                Color(0x33EF4444),
-                                Color(0x00EF4444)
+                                AccentRed.copy(alpha = 0.14f),
+                                AccentRed.copy(alpha = 0.00f)
                             )
                         ),
                         CircleShape
+                    )
+            )
+            
+            // Main circular button
+            Surface(
+                modifier = Modifier
+                    .size(120.dp)
+                    .clickable(
+                        onClick = onButtonPress,
+                        indication = null,
+                        interactionSource = remember { MutableInteractionSource() }
                     ),
-                contentAlignment = Alignment.Center
+                shape = CircleShape,
+                color = AccentRed,
+                shadowElevation = 16.dp
             ) {
-                Surface(
-                    modifier = Modifier
-                        .size(110.dp)
-                        .clickable(
-                            onClick = onButtonPress,
-                            indication = null,
-                            interactionSource = remember { MutableInteractionSource() }
-                        ),
-                    shape = CircleShape,
-                    color = DangerAccent,
-                    shadowElevation = 20.dp
+                Box(
+                    contentAlignment = Alignment.Center,
+                    modifier = Modifier.fillMaxSize()
                 ) {
-                    Column(
-                        modifier = Modifier.fillMaxSize(),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center
-                    ) {
-                        Text(
-                            text = "WIPE",
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.Black,
-                            color = TextPrimary,
-                            letterSpacing = 3.sp
+                    // Power/Delete icon using Canvas
+                    Canvas(modifier = Modifier.size(48.dp)) {
+                        val strokeWidth = 4.dp.toPx()
+                        val centerX = size.width / 2
+                        val centerY = size.height / 2
+                        val radius = size.width / 3
+                        
+                        // Draw circle with gap at top
+                        drawArc(
+                            color = Color.White,
+                            startAngle = 135f,
+                            sweepAngle = 270f,
+                            useCenter = false,
+                            style = Stroke(width = strokeWidth, cap = StrokeCap.Round)
                         )
                         
-                        Spacer(modifier = Modifier.height(4.dp))
-                        
-                        Surface(
-                            shape = CircleShape,
-                            color = Color(0x33FFFFFF),
-                            modifier = Modifier.size(28.dp)
-                        ) {
-                            Box(
-                                contentAlignment = Alignment.Center,
-                                modifier = Modifier.fillMaxSize()
-                            ) {
-                                Text(
-                                    text = "⚡",
-                                    fontSize = 18.sp
-                                )
-                            }
-                        }
+                        // Draw vertical line (power symbol)
+                        drawLine(
+                            color = Color.White,
+                            start = Offset(centerX, centerY - radius),
+                            end = Offset(centerX, centerY),
+                            strokeWidth = strokeWidth,
+                            cap = StrokeCap.Round
+                        )
                     }
                 }
+            }
+            
+            // Inner rotating ring
+            Canvas(
+                modifier = Modifier
+                    .size(135.dp)
+                    .rotate(orbitRotation)
+            ) {
+                drawArc(
+                    color = AccentRed.copy(alpha = 0.2f),
+                    startAngle = 0f,
+                    sweepAngle = 120f,
+                    useCenter = false,
+                    style = Stroke(width = 3.dp.toPx(), cap = StrokeCap.Round)
+                )
+                
+                drawArc(
+                    color = AccentRed.copy(alpha = 0.2f),
+                    startAngle = 180f,
+                    sweepAngle = 120f,
+                    useCenter = false,
+                    style = Stroke(width = 3.dp.toPx(), cap = StrokeCap.Round)
+                )
             }
         }
     }
 }
 
 @Composable
-private fun RippleEffect(ripple: RippleAnimation) {
-    val scale by animateFloatAsState(
-        targetValue = 3.5f,
-        animationSpec = tween(1500, easing = LinearOutSlowInEasing),
-        label = "ripple_scale"
+private fun OrbitingElements(rotation: Float) {
+    Canvas(modifier = Modifier.size(160.dp)) {
+        val radius = 80.dp.toPx()
+        val centerX = size.width / 2
+        val centerY = size.height / 2
+        
+        for (i in 0..2) {
+            val angle = Math.toRadians((rotation + i * 120).toDouble())
+            val x = centerX + radius * cos(angle).toFloat()
+            val y = centerY + radius * sin(angle).toFloat()
+            
+            drawCircle(
+                color = AccentRed.copy(alpha = 0.3f),
+                radius = 4.dp.toPx(),
+                center = Offset(x, y)
+            )
+        }
+    }
+}
+
+@Composable
+private fun BurstParticle(particle: ParticleAnimation) {
+    val distance by animateFloatAsState(
+        targetValue = 80f,
+        animationSpec = tween(1000, easing = FastOutSlowInEasing),
+        label = "particle_distance"
     )
+    
     val alpha by animateFloatAsState(
         targetValue = 0f,
-        animationSpec = tween(1500, easing = FastOutSlowInEasing),
-        label = "ripple_alpha"
+        animationSpec = tween(1000, easing = LinearEasing),
+        label = "particle_alpha"
     )
+    
+    val angle = Math.toRadians(particle.angle.toDouble())
+    val offsetX = (distance * cos(angle)).dp
+    val offsetY = (distance * sin(angle)).dp
     
     Box(
         modifier = Modifier
-            .size(140.dp)
-            .scale(scale)
+            .offset(x = offsetX, y = offsetY)
+            .size(8.dp)
             .alpha(alpha)
-            .border(3.dp, DangerAccent, CircleShape)
+            .background(AccentRed, CircleShape)
     )
 }
 
@@ -423,29 +552,33 @@ private fun RippleEffect(ripple: RippleAnimation) {
 private fun FooterSection() {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier.padding(bottom = 16.dp)
+        modifier = Modifier.padding(bottom = 20.dp)
     ) {
         Row(
-            verticalAlignment = Alignment.CenterVertically
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center,
+            modifier = Modifier.fillMaxWidth()
         ) {
             Box(
                 modifier = Modifier
                     .size(6.dp)
-                    .background(PrimaryAccent, CircleShape)
+                    .background(AccentBlue, CircleShape)
             )
             
-            Spacer(modifier = Modifier.width(8.dp))
+            Spacer(modifier = Modifier.width(10.dp))
             
             Text(
-                text = "Device will restart automatically",
+                text = "Device will restart automatically after completion",
                 fontSize = 13.sp,
-                color = TextTertiary,
-                fontWeight = FontWeight.Medium
+                color = TextMuted,
+                fontWeight = FontWeight.Medium,
+                textAlign = TextAlign.Center
             )
         }
     }
 }
 
-data class RippleAnimation(
-    val id: Long = System.currentTimeMillis()
+data class ParticleAnimation(
+    val angle: Float,
+    val id: Long = System.currentTimeMillis() + angle.toLong()
 )
