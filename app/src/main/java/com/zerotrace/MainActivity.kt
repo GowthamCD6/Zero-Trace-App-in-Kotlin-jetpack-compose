@@ -47,6 +47,10 @@ class MainActivity : ComponentActivity() {
                     onNavigateToStart = { 
                         showInstruction = false
                         showWipe = true
+                    },
+                    onNavigateBack = {
+                        showInstruction = false
+                        showHome = true
                     }
                 )
             } else if (showWipe) {

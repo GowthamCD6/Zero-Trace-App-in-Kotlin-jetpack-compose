@@ -1,12 +1,9 @@
 package com.zerotrace.pages
-import com.zerotrace.utils.DeveloperOptionsUtils
-import com.zerotrace.utils.ExternalIn
-import com.zerotrace.utils.BatteryUtils
-import com.zerotrace.utils.BackgroundAppChecker
-import com.zerotrace.utils.DeviceInfoCollector
-import com.zerotrace.utils.ExternalOut
-import androidx.compose.animation.core.*
+
+import android.app.Activity
+import android.widget.Toast
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -22,43 +19,125 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import android.widget.Toast
-import androidx.compose.ui.platform.LocalContext
+import com.zerotrace.utils.*
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import android.app.Activity
+// Data class for tutorial steps
+data class TutorialStep(
+    val id: Int,
+    val title: String,
+    val description: String,
+    val details: String,
+    val icon: ImageVector,
+    val color: Color,
+    val warning: String? = null
+)
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun InstructionScreen(onNavigateToStart: () -> Unit) {
+fun InstructionScreen(
+    onNavigateToStart: () -> Unit,
+    onNavigateBack: () -> Unit = {}
+) {
+    // Animation states
     val fadeAnim = remember { Animatable(0f) }
     val slideAnim = remember { Animatable(100f) }
     val stepsOpacity = remember { Animatable(0f) }
     val buttonScale = remember { Animatable(0.8f) }
     val progressPulse = remember { Animatable(1f) }
 
+    // Step tracking states
     var completedSteps by remember { mutableStateOf(setOf<Int>()) }
-    var currentStepIndex by remember { mutableIntStateOf(0) }
+    var nextRequiredStep by remember { mutableIntStateOf(1) }
+    var showDevOptionsModal by remember { mutableStateOf(false) }
 
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
 
-    // Developer Options status for step 3
-    var devOptionsEnabled by remember { mutableStateOf(false) }
-    var devOptionsChecked by remember { mutableStateOf(false) }
-    var showDevOptionsModal by remember { mutableStateOf(false) }
+    // Tutorial steps configuration
+    val tutorialSteps = remember {
+        listOf(
+            TutorialStep(
+                id = 1,
+                title = "Connect USB OTG Drive",
+                description = "Insert a USB OTG drive or microSD card",
+                details = "Connect a clean USB OTG drive or microSD card (minimum 1GB recommended). This drive will securely store your device information before the wipe. Make sure it's properly formatted and accessible.",
+                icon = Icons.Filled.Storage,
+                color = Color(0xFF2196F3),
+                warning = "Keep this drive safe - you'll need it after the reset"
+            ),
+            TutorialStep(
+                id = 2,
+                title = "Verify Storage Access",
+                description = "Ensure the app can read and write to the drive",
+                details = "Grant ZeroTrace permission to access the connected storage. The app will verify that it can save your device identifiers (model, serial number, IMEI) to the drive for later verification.\n\nClick here to auto collect data.",
+                icon = Icons.Filled.VerifiedUser,
+                color = Color(0xFF9C27B0),
+                warning = "Storage access is required for the certificate process"
+            ),
+            TutorialStep(
+                id = 3,
+                title = "Enable Developer Options",
+                description = "Activate USB debugging for full device access",
+                details = "Go to Settings → About Phone → Tap 'Build Number' 7 times to enable Developer Options. Then enable 'USB Debugging' and 'OEM Unlocking' if available. This ensures complete data sanitization.",
+                icon = Icons.Filled.Build,
+                color = Color(0xFFFF9800),
+                warning = "Required for NIST-standard cryptographic erasure"
+            ),
+            TutorialStep(
+                id = 4,
+                title = "Backup Important Data",
+                description = "Save photos, contacts, and files elsewhere",
+                details = "This process is completely irreversible. Export all photos, contacts, documents, and app data to cloud storage or another device. Once the wipe begins, all data will be permanently destroyed using cryptographic erasure.",
+                icon = Icons.Filled.CloudUpload,
+                color = Color(0xFF00BCD4),
+                warning = "All data will be permanently and irrecoverably erased"
+            ),
+            TutorialStep(
+                id = 5,
+                title = "Close All Applications",
+                description = "Log out and save any unsaved work",
+                details = "Sign out of all accounts (Google, social media, banking apps). Close all open apps and save any work in progress. Ensure no critical processes are running that could interfere with the reset.",
+                icon = Icons.Filled.AppShortcut,
+                color = Color(0xFF4CAF50),
+                warning = "Unsaved data will be lost permanently"
+            ),
+            TutorialStep(
+                id = 6,
+                title = "Charge Your Device",
+                description = "Connect to power and ensure >50% battery",
+                details = "Plug in your charger and verify battery level is above 50%. The factory reset and verification process takes 20-40 minutes. Power interruption during this process could cause issues.",
+                icon = Icons.Filled.BatteryFull,
+                color = Color(0xFFF44336),
+                warning = "Do not disconnect power during the process"
+            ),
+            TutorialStep(
+                id = 7,
+                title = "Keep USB Drive Ready",
+                description = "You'll physically remove and reconnect the drive",
+                details = "After device information is saved, you'll be instructed to physically remove the USB drive before starting the wipe. After your device resets to factory state, you'll reconnect the same drive for verification and certificate generation.",
+                icon = Icons.Filled.UsbOff,
+                color = Color(0xFF8BC34A),
+                warning = "Use the SAME USB drive after reset - don't lose it!"
+            )
+        )
+    }
 
-    // (Removed LaunchedEffect that auto-shows modal for Developer Options)
-    // Modal warning if Developer Options is off
+    // Calculated values
+    val allStepsCompleted = completedSteps.size == tutorialSteps.size
+    val progressPercentage = completedSteps.size / tutorialSteps.size.toFloat()
+
+    // Developer Options modal
     if (showDevOptionsModal) {
         AlertDialog(
             onDismissRequest = { showDevOptionsModal = false },
@@ -67,128 +146,25 @@ fun InstructionScreen(onNavigateToStart: () -> Unit) {
                     Text("OK")
                 }
             },
-            title = {
-                Text("Developer Options Disabled")
-            },
-            text = {
-                Text("Your mobile phone's Developer Options are off. Please enable them to continue.")
-            }
+            title = { Text("Developer Options Disabled") },
+            text = { Text("Your mobile phone's Developer Options are off. Please enable them to continue.") }
         )
     }
 
-    val tutorialSteps = listOf(
-        TutorialStep(
-            id = 1,
-            title = "Connect USB OTG Drive",
-            description = "Insert a USB OTG drive or microSD card",
-            details = "Connect a clean USB OTG drive or microSD card (minimum 1GB recommended). This drive will securely store your device information before the wipe. Make sure it's properly formatted and accessible.",
-            icon = Icons.Filled.Storage,
-            color = Color(0xFF2196F3),
-            warning = "Keep this drive safe - you'll need it after the reset"
-        ),
-        TutorialStep(
-            id = 2,
-            title = "Verify Storage Access",
-            description = "Ensure the app can read and write to the drive",
-            details = "Grant ZeroTrace permission to access the connected storage. The app will verify that it can save your device identifiers (model, serial number, IMEI) to the drive for later verification.\n\nClick here to auto collect data.",
-            icon = Icons.Filled.Storage,
-            color = Color(0xFF9C27B0),
-            warning = "Storage access is required for the certificate process"
-        ),
-        TutorialStep(
-            id = 3,
-            title = "Enable Developer Options",
-            description = "Activate USB debugging for full device access",
-            details = "Go to Settings → About Phone → Tap 'Build Number' 7 times to enable Developer Options. Then enable 'USB Debugging' and 'OEM Unlocking' if available. This ensures complete data sanitization.",
-            icon = Icons.Filled.Build,
-            color = Color(0xFFFF9800),
-            warning = "Required for NIST-standard cryptographic erasure"
-        ),
-        TutorialStep(
-            id = 4,
-            title = "Backup Important Data",
-            description = "Save photos, contacts, and files elsewhere",
-            details = "This process is completely irreversible. Export all photos, contacts, documents, and app data to cloud storage or another device. Once the wipe begins, all data will be permanently destroyed using cryptographic erasure.",
-            icon = Icons.Filled.CloudUpload,
-            color = Color(0xFF00BCD4),
-            warning = "All data will be permanently and irrecoverably erased"
-        ),
-        TutorialStep(
-            id = 5,
-            title = "Close All Applications",
-            description = "Log out and save any unsaved work",
-            details = "Sign out of all accounts (Google, social media, banking apps). Close all open apps and save any work in progress. Ensure no critical processes are running that could interfere with the reset.",
-            icon = Icons.Filled.Delete,
-            color = Color(0xFF4CAF50),
-            warning = "Unsaved data will be lost permanently"
-        ),
-        TutorialStep(
-            id = 6,
-            title = "Charge Your Device",
-            description = "Connect to power and ensure >50% battery",
-            details = "Plug in your charger and verify battery level is above 50%. The factory reset and verification process takes 20-40 minutes. Power interruption during this process could cause issues.",
-            icon = Icons.Filled.BatteryFull,
-            color = Color(0xFFF44336),
-            warning = "Do not disconnect power during the process"
-        ),
-        TutorialStep(
-            id = 7,
-            title = "Keep USB Drive Ready",
-            description = "You'll physically remove and reconnect the drive",
-            details = "After device information is saved, you'll be instructed to physically remove the USB drive before starting the wipe. After your device resets to factory state, you'll reconnect the same drive for verification and certificate generation.",
-            icon = Icons.Filled.Storage,
-            color = Color(0xFF8BC34A),
-            warning = "Use the SAME USB drive after reset - don't lose it!"
-        )
-    )
-    // ...existing code...
-    // Tutorial Steps rendering
-    Column(
-        modifier = Modifier.alpha(stepsOpacity.value),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        Text(
-            text = "Preparation Steps",
-            fontSize = 22.sp,
-            fontWeight = FontWeight.Bold,
-            color = Color(0xFF1A1A1A),
-            modifier = Modifier.padding(bottom = 8.dp)
-        )
-
-        tutorialSteps.forEachIndexed { index, step ->
-            if (step.id == 3) {
-                EnhancedTutorialStepCard(
-                    step = step,
-                    completed = completedSteps.contains(step.id),
-                    stepNumber = index + 1,
-                    totalSteps = tutorialSteps.size,
-                    onClick = {
-                        currentStepIndex = index
-                        // ...other step handling...
-                    }
-                )
-            }
-        }
-    }
-
-    val allStepsCompleted = completedSteps.size == tutorialSteps.size
-    val progressPercentage = completedSteps.size / tutorialSteps.size.toFloat()
-
+    // Animation effects
     LaunchedEffect(Unit) {
-        launch {
-            fadeAnim.animateTo(1f, animationSpec = tween(800, easing = EaseOutCubic))
-        }
-        launch {
+        launch { fadeAnim.animateTo(1f, animationSpec = tween(800, easing = EaseOutCubic)) }
+        launch { 
             delay(100)
-            slideAnim.animateTo(0f, animationSpec = spring(dampingRatio = 0.8f, stiffness = 200f))
+            slideAnim.animateTo(0f, animationSpec = spring(dampingRatio = 0.8f, stiffness = 200f)) 
         }
-        launch {
+        launch { 
             delay(300)
-            stepsOpacity.animateTo(1f, animationSpec = tween(600, easing = EaseOutCubic))
+            stepsOpacity.animateTo(1f, animationSpec = tween(600, easing = EaseOutCubic)) 
         }
-        launch {
+        launch { 
             delay(500)
-            buttonScale.animateTo(1f, animationSpec = spring(dampingRatio = 0.7f, stiffness = 180f))
+            buttonScale.animateTo(1f, animationSpec = spring(dampingRatio = 0.7f, stiffness = 180f)) 
         }
     }
 
@@ -197,6 +173,81 @@ fun InstructionScreen(onNavigateToStart: () -> Unit) {
             launch {
                 progressPulse.animateTo(1.1f, animationSpec = tween(300))
                 progressPulse.animateTo(1f, animationSpec = tween(300))
+            }
+        }
+    }
+
+    // Step completion handler
+    fun handleStepCompletion(step: TutorialStep) {
+        if (step.id != nextRequiredStep) {
+            Toast.makeText(
+                context,
+                "❌ Please complete Step $nextRequiredStep first before proceeding to Step ${step.id}",
+                Toast.LENGTH_LONG
+            ).show()
+            return
+        }
+
+        when (step.id) {
+            1 -> {
+                val detected = ExternalIn.checkExternalStorage(context, showToast = true)
+                if (detected) {
+                    completedSteps = completedSteps + step.id
+                    nextRequiredStep = 2
+                }
+            }
+            2 -> {
+                if (!completedSteps.contains(step.id)) {
+                    val activity = context as? Activity
+                    activity?.let {
+                        DeviceInfoCollector.requestStorageAccess(it, object : DeviceInfoCollector.StorageAccessCallback {
+                            override fun onStorageAccessGranted() {
+                                completedSteps = completedSteps + step.id
+                                nextRequiredStep = 3
+                            }
+                            override fun onStorageAccessDenied() {}
+                        })
+                    }
+                }
+            }
+            3 -> {
+                if (DeveloperOptionsUtils.isDeveloperOptionsEnabled(context)) {
+                    completedSteps = completedSteps + step.id
+                    nextRequiredStep = 4
+                    Toast.makeText(context, "✅ Developer Options Enabled Successfully!", Toast.LENGTH_SHORT).show()
+                } else {
+                    showDevOptionsModal = true
+                }
+            }
+            4 -> {
+                completedSteps = completedSteps + step.id
+                nextRequiredStep = 5
+            }
+            5 -> {
+                if (!completedSteps.contains(step.id)) {
+                    coroutineScope.launch {
+                        BackgroundAppChecker.checkBackgroundApps(context)
+                        completedSteps = completedSteps + step.id
+                        nextRequiredStep = 6
+                    }
+                }
+            }
+            6 -> {
+                coroutineScope.launch {
+                    val batteryOk = BatteryUtils.isBatterySufficient(context, 50)
+                    if (batteryOk) {
+                        completedSteps = completedSteps + step.id
+                        nextRequiredStep = 7
+                    }
+                }
+            }
+            7 -> {
+                coroutineScope.launch {
+                    val isExternalRemoved = ExternalOut.isExternalStorageRemoved(context)
+                    if (isExternalRemoved) {
+                        completedSteps = completedSteps + step.id
+                    }
+                }
             }
         }
     }
@@ -223,6 +274,7 @@ fun InstructionScreen(onNavigateToStart: () -> Unit) {
                 .padding(top = 40.dp, bottom = 32.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
+
             // Header
             Column(
                 modifier = Modifier
@@ -281,106 +333,47 @@ fun InstructionScreen(onNavigateToStart: () -> Unit) {
                     fontSize = 22.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color(0xFF1A1A1A),
-                    modifier = Modifier.padding(bottom = 8.dp)
+                    modifier = Modifier.padding(bottom = 4.dp)
                 )
-
-                tutorialSteps.forEachIndexed { index, step ->
-                    if (step.id == 3) {
-                        EnhancedTutorialStepCard(
-                            step,
-                            completedSteps.contains(step.id),
-                            index + 1,
-                            tutorialSteps.size
-                        ) {
-                            currentStepIndex = index
-                            if (DeveloperOptionsUtils.isDeveloperOptionsEnabled(context)) {
-                                devOptionsEnabled = true
-                                completedSteps = completedSteps + step.id
-                                Toast.makeText(context, "✅ Developer Options Enabled", Toast.LENGTH_SHORT).show()
-                            } else {
-                                devOptionsEnabled = false
-                                completedSteps = completedSteps - step.id
-                                // Only show modal when user taps
-                                showDevOptionsModal = true
-                            }
-                        }
-                    } else {
-                        EnhancedTutorialStepCard(
-                            step = step,
-                            completed = completedSteps.contains(step.id),
-                            stepNumber = index + 1,
-                            totalSteps = tutorialSteps.size,
-                            onClick = {
-                                currentStepIndex = index
-                                if (step.id == 1) {
-                                    val detected = ExternalIn.checkExternalStorage(context, showToast = true)
-                                    if (detected) {
-                                        completedSteps = completedSteps + step.id
-                                    } else {
-                                        completedSteps = completedSteps - step.id
-                                    }
-                                } else if (step.id == 2) {
-                                    // Storage Access - Device Info Collection
-                                    if (completedSteps.contains(step.id)) {
-                                        // Already completed - show success message and don't allow toggle
-                                        Toast.makeText(context, "✅ Storage access already verified", Toast.LENGTH_SHORT).show()
-                                    } else {
-                                        val activity = context as? Activity
-                                        if (activity != null) {
-                                            DeviceInfoCollector.requestStorageAccess(activity, object : DeviceInfoCollector.StorageAccessCallback {
-                                                override fun onStorageAccessGranted() {
-                                                    completedSteps = completedSteps + step.id
-                                                }
-                                                
-                                                override fun onStorageAccessDenied() {
-                                                    completedSteps = completedSteps - step.id
-                                                }
-                                            })
-                                        } else {
-                                            Toast.makeText(context, "Unable to access storage from this context", Toast.LENGTH_SHORT).show()
-                                        }
-                                    }
-                                } else if (step.id == 5) {
-                                    if (completedSteps.contains(step.id)) {
-                                        // Already completed - show success message and don't allow toggle
-                                        Toast.makeText(context, "✅ All applications already closed", Toast.LENGTH_SHORT).show()
-                                    } else {
-                                        coroutineScope.launch {
-                                            BackgroundAppChecker.checkBackgroundApps(context)
-                                            // Note: This will be handled by BackgroundAppChecker callback
-                                            // For now, we'll check if apps were closed successfully
-                                            completedSteps = completedSteps + step.id
-                                        }
-                                    }
-                                } else if (step.id == 6) {
-                                    coroutineScope.launch {
-                                        val batteryOk = BatteryUtils.isBatterySufficient(context, 50)
-                                        if (batteryOk) {
-                                            completedSteps = completedSteps + step.id
-                                        } else {
-                                            completedSteps = completedSteps - step.id
-                                        }
-                                    }
-                                } else if (step.id == 7) {
-                                    // Step 7: Keep USB Drive Ready - Check if external storage is safely removed
-                                    coroutineScope.launch {
-                                        val isExternalRemoved = ExternalOut.isExternalStorageRemoved(context)
-                                        if (isExternalRemoved) {
-                                            completedSteps = completedSteps + step.id
-                                        } else {
-                                            completedSteps = completedSteps - step.id
-                                        }
-                                    }
-                                } else {
-                                    completedSteps = if (completedSteps.contains(step.id)) {
-                                        completedSteps - step.id
-                                    } else {
-                                        completedSteps + step.id
-                                    }
-                                }
-                            }
+                
+                // Sequential flow indicator
+                Card(
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFFE3F2FD)),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 16.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Info,
+                            contentDescription = null,
+                            tint = Color(0xFF1976D2),
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Text(
+                            text = "Complete steps in order. Step $nextRequiredStep is now available.",
+                            fontSize = 13.sp,
+                            color = Color(0xFF1565C0),
+                            fontWeight = FontWeight.Medium,
+                            modifier = Modifier.padding(start = 8.dp)
                         )
                     }
+                }
+
+                tutorialSteps.forEach { step ->
+                    EnhancedTutorialStepCard(
+                        step = step,
+                        completed = completedSteps.contains(step.id),
+                        stepNumber = step.id,
+                        totalSteps = tutorialSteps.size,
+                        clickable = true,
+                        isNextStep = step.id == nextRequiredStep,
+                        onClick = { handleStepCompletion(step) }
+                    )
                 }
             }
 
@@ -553,59 +546,27 @@ fun InstructionScreen(onNavigateToStart: () -> Unit) {
             Spacer(modifier = Modifier.height(16.dp))
         }
 
-        // Floating Progress Indicator
+        // Unique Floating Back Button
+        UniqueFloatingBackButton(
+            onNavigateBack = onNavigateBack,
+            fadeAnim = fadeAnim.value
+        )
+
+        // Floating Progress Modal
         if (progressPercentage > 0f) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(24.dp),
+                    .padding(20.dp),
                 contentAlignment = Alignment.TopEnd
             ) {
-                Card(
-                    shape = RoundedCornerShape(20.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = Color.White
-                    ),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
-                    modifier = Modifier
-                        .scale(progressPulse.value)
-                        .width(140.dp)
-                ) {
-                    Column(
-                        modifier = Modifier.padding(16.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            CircularProgressIndicator(
-                                progress = progressPercentage,
-                                modifier = Modifier.size(70.dp),
-                                strokeWidth = 6.dp,
-                                color = Color(0xFF4CAF50),
-                                trackColor = Color(0xFFE0E0E0)
-                            )
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text(
-                                    text = "${completedSteps.size}",
-                                    fontSize = 20.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color(0xFF1A1A1A)
-                                )
-                                Text(
-                                    text = "of ${tutorialSteps.size}",
-                                    fontSize = 11.sp,
-                                    color = Color(0xFF78909C)
-                                )
-                            }
-                        }
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            text = "Steps Done",
-                            fontSize = 12.sp,
-                            color = Color(0xFF546E7A),
-                            fontWeight = FontWeight.Medium
-                        )
-                    }
-                }
+                FloatingProgressCard(
+                    completedSteps = completedSteps.size,
+                    totalSteps = tutorialSteps.size,
+                    progressPercentage = progressPercentage,
+                    isComplete = allStepsCompleted,
+                    pulseScale = progressPulse.value
+                )
             }
         }
     }
@@ -641,15 +602,133 @@ fun ProcessStepItem(number: String, text: String) {
     }
 }
 
-data class TutorialStep(
-    val id: Int,
-    val title: String,
-    val description: String,
-    val details: String,
-    val icon: ImageVector,
-    val color: Color,
-    val warning: String?
-)
+@Composable
+fun FloatingProgressCard(
+    completedSteps: Int,
+    totalSteps: Int,
+    progressPercentage: Float,
+    isComplete: Boolean,
+    pulseScale: Float
+) {
+    Card(
+        modifier = Modifier
+            .scale(pulseScale)
+            .width(140.dp),
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = Color.White
+        ),
+        elevation = CardDefaults.cardElevation(
+            defaultElevation = 8.dp,
+            pressedElevation = 12.dp
+        )
+    ) {
+        Column(
+            modifier = Modifier
+                .padding(16.dp)
+                .fillMaxWidth(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            // Progress Circle Container
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier.size(76.dp)
+            ) {
+                // Background Track
+                CircularProgressIndicator(
+                    progress = 1f,
+                    modifier = Modifier.fillMaxSize(),
+                    strokeWidth = 6.dp,
+                    color = Color(0xFFE8F5E8),
+                    strokeCap = androidx.compose.ui.graphics.StrokeCap.Round
+                )
+                // Active Progress
+                CircularProgressIndicator(
+                    progress = progressPercentage,
+                    modifier = Modifier.fillMaxSize(),
+                    strokeWidth = 6.dp,
+                    color = Color(0xFF4CAF50),
+                    strokeCap = androidx.compose.ui.graphics.StrokeCap.Round
+                )
+                // Center Content - Properly Centered
+                Box(
+                    contentAlignment = Alignment.Center,
+                    modifier = Modifier.fillMaxSize()
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        Text(
+                            text = completedSteps.toString(),
+                            fontSize = 22.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF2E7D32),
+                            textAlign = TextAlign.Center
+                        )
+                        Text(
+                            text = "of $totalSteps",
+                            fontSize = 10.sp,
+                            color = Color(0xFF81C784),
+                            fontWeight = FontWeight.Medium,
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                }
+            }
+            
+            Spacer(modifier = Modifier.height(10.dp))
+            
+            // Title
+            Text(
+                text = "Steps Done",
+                fontSize = 12.sp,
+                color = Color(0xFF388E3C),
+                fontWeight = FontWeight.SemiBold,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth()
+            )
+            
+            Spacer(modifier = Modifier.height(6.dp))
+            
+            // Status Indicator
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                if (isComplete) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.CheckCircle,
+                            contentDescription = "Complete",
+                            tint = Color(0xFF4CAF50),
+                            modifier = Modifier.size(12.dp)
+                        )
+                        Spacer(modifier = Modifier.width(3.dp))
+                        Text(
+                            text = "Complete",
+                            fontSize = 10.sp,
+                            color = Color(0xFF4CAF50),
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                } else {
+                    Text(
+                        text = "${(progressPercentage * 100).toInt()}%",
+                        fontSize = 10.sp,
+                        color = Color(0xFF66BB6A),
+                        fontWeight = FontWeight.Medium,
+                        textAlign = TextAlign.Center
+                    )
+                }
+            }
+        }
+    }
+}
 
 @Composable
 fun EnhancedTutorialStepCard(
@@ -658,18 +737,27 @@ fun EnhancedTutorialStepCard(
     stepNumber: Int,
     totalSteps: Int,
     clickable: Boolean = true,
+    isNextStep: Boolean = false, // New parameter to indicate if this is the next available step
     onClick: () -> Unit
 ) {
     val cardScale = remember { Animatable(1f) }
     val checkmarkRotation = remember { Animatable(0f) }
     
     val cardColor by animateColorAsState(
-        targetValue = if (completed) Color(0xFFF1F8F4) else Color.White,
+        targetValue = when {
+            completed -> Color(0xFFF1F8F4) // Green for completed
+            isNextStep -> Color(0xFFF3F7FF) // Light blue for next available step
+            else -> Color(0xFFF5F5F5) // Gray for locked steps
+        },
         animationSpec = tween(300)
     )
 
     val borderColor by animateColorAsState(
-        targetValue = if (completed) Color(0xFF4CAF50) else Color(0xFFE0E0E0),
+        targetValue = when {
+            completed -> Color(0xFF4CAF50) // Green for completed
+            isNextStep -> Color(0xFF2196F3) // Blue for next available step
+            else -> Color(0xFFBDBDBD) // Gray for locked steps
+        },
         animationSpec = tween(300)
     )
 
@@ -743,26 +831,41 @@ fun EnhancedTutorialStepCard(
                     modifier = Modifier
                         .size(32.dp)
                         .background(
-                            if (completed) Color(0xFF4CAF50) else Color(0xFFE0E0E0),
+                            when {
+                                completed -> Color(0xFF4CAF50) // Green for completed
+                                isNextStep -> Color(0xFF2196F3) // Blue for next available step
+                                else -> Color(0xFFBDBDBD) // Gray for locked steps
+                            },
                             CircleShape
                         )
                         .rotate(if (completed) checkmarkRotation.value else 0f),
                     contentAlignment = Alignment.Center
                 ) {
-                    if (completed) {
-                        Icon(
-                            imageVector = Icons.Filled.Check,
-                            contentDescription = null,
-                            tint = Color.White,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    } else {
-                        Text(
-                            text = stepNumber.toString(),
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color(0xFF757575)
-                        )
+                    when {
+                        completed -> {
+                            Icon(
+                                imageVector = Icons.Filled.Check,
+                                contentDescription = null,
+                                tint = Color.White,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                        isNextStep -> {
+                            Text(
+                                text = stepNumber.toString(),
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White
+                            )
+                        }
+                        else -> {
+                            Icon(
+                                imageVector = Icons.Filled.Lock,
+                                contentDescription = null,
+                                tint = Color.White,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
                     }
                 }
             }
@@ -805,6 +908,131 @@ fun EnhancedTutorialStepCard(
                         )
                     }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+fun UniqueFloatingBackButton(
+    onNavigateBack: () -> Unit,
+    fadeAnim: Float
+) {
+    val buttonScale = remember { Animatable(0.9f) }
+    val iconRotation = remember { Animatable(0f) }
+    val glowPulse = remember { Animatable(1f) }
+    val shimmerOffset = remember { Animatable(0f) }
+    
+    // Clean entrance animation
+    LaunchedEffect(Unit) {
+        launch {
+            delay(400) // Smooth delay after main content starts
+            buttonScale.animateTo(1f, animationSpec = spring(dampingRatio = 0.8f, stiffness = 200f))
+        }
+        launch {
+            delay(600)
+            iconRotation.animateTo(360f, animationSpec = tween(1000, easing = EaseOutCubic))
+        }
+    }
+    
+    // Gentle continuous glow effect
+    LaunchedEffect(Unit) {
+        while (true) {
+            glowPulse.animateTo(1.15f, animationSpec = tween(1500, easing = EaseInOutSine))
+            glowPulse.animateTo(1f, animationSpec = tween(1500, easing = EaseInOutSine))
+        }
+    }
+    
+    // Subtle shimmer effect
+    LaunchedEffect(Unit) {
+        while (true) {
+            shimmerOffset.animateTo(1f, animationSpec = tween(3000, easing = LinearEasing))
+            shimmerOffset.snapTo(0f)
+        }
+    }
+    
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(top = 16.dp, start = 16.dp)
+            .alpha(fadeAnim),
+        contentAlignment = Alignment.TopStart
+    ) {
+        Card(
+            onClick = onNavigateBack,
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = Color.Transparent
+            ),
+            elevation = CardDefaults.cardElevation(
+                defaultElevation = 12.dp,
+                pressedElevation = 16.dp
+            ),
+            modifier = Modifier
+                .size(52.dp)
+                .scale(buttonScale.value)
+        ) {
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        brush = Brush.radialGradient(
+                            colors = listOf(
+                                Color(0xFF4CAF50),
+                                Color(0xFF388E3C),
+                                Color(0xFF2E7D32)
+                            ),
+                            radius = 60f
+                        ),
+                        shape = RoundedCornerShape(18.dp)
+                    )
+            ) {
+                // Outer glow ring
+                Box(
+                    modifier = Modifier
+                        .size(44.dp)
+                        .background(
+                            Color.White.copy(alpha = 0.15f),
+                            CircleShape
+                        )
+                        .scale(glowPulse.value)
+                )
+                
+                // Inner glow ring
+                Box(
+                    modifier = Modifier
+                        .size(32.dp)
+                        .background(
+                            Color.White.copy(alpha = 0.2f),
+                            CircleShape
+                        )
+                        .scale(glowPulse.value * 0.8f)
+                )
+                
+                // Home icon with rotation
+                Icon(
+                    imageVector = Icons.Filled.Home,
+                    contentDescription = "Back to Home",
+                    tint = Color.White,
+                    modifier = Modifier
+                        .size(26.dp)
+                        .rotate(iconRotation.value * 0.1f) // Subtle rotation
+                )
+                
+                // Shimmer overlay effect
+                Box(
+                    modifier = Modifier
+                        .size(18.dp)
+                        .background(
+                            Color.White.copy(alpha = 0.3f * (1f - shimmerOffset.value.coerceIn(0f, 1f))),
+                            CircleShape
+                        )
+                        .offset(
+                            x = (shimmerOffset.value * 12).dp,
+                            y = (-shimmerOffset.value * 8).dp
+                        )
+                )
             }
         }
     }
